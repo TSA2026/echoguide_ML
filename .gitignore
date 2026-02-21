@@ -1,0 +1,8 @@
+# Python environments
+venv/
+venv_clean/
+
+# PyTorch wheel or other big files
+*.whl
+*.dll
+*.lib
