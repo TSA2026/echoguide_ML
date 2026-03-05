@@ -51,9 +51,18 @@ export class TrialEngine {
     const wasReversal =
       this.lastDirection !== null && direction !== this.lastDirection
 
+    // if (wasReversal) {
+    //   this.reversals.push(playedDb)
+    // }
+
     if (wasReversal) {
-      this.reversals.push(playedDb)
+    const lastStep = this.history[this.history.length - 1]
+    if (lastStep) {
+      this.reversals.push(lastStep.playedDb)
     }
+  }
+
+    
 
     // Record step for  replay
     this.history.push({ playedDb, heard, wasReversal })
