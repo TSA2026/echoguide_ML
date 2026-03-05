@@ -1,17 +1,5 @@
-type Direction = "up" | "down"
-
-interface TrialConfig {
-  startDb?: number          // where to begin (default -30)
-  requiredReversals?: number // how many before threshold is calculated (default 6)
-  minDb?: number            // hardware floor (default -80)
-  maxDb?: number            // hardware ceiling (default 0)
-}
-// one step of the trial
-interface TrialStep {
-  playedDb: number
-  heard: boolean
-  wasReversal: boolean // did the direction change? 
-}
+import { TrialConfig, TrialStep } from "./types"
+import type { Direction } from "./types"  // add Direction to types.ts
 
 export class TrialEngine {
   private currentDb: number

@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from hearing_test import generate_pure_tone, compute_report
 
 # --- Tone Generation Configuration -------------------------------------------
@@ -16,9 +17,24 @@ TEST_FREQUENCIES = [
     500, 250, 125, 80, 60, 40, 20                                        # Low sweep
 ]
 
-#---Server------
 
 app = FastAPI()
+
+# Allow requests from your frontend
+origins = [
+    "http://localhost:5173",  # your Vite dev server
+    # "http://localhost:3000", # add more if needed
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,   # which domains can talk to this API
+    allow_credentials=True,
+    allow_methods=["*"],     # GET, POST, etc.
+    allow_headers=["*"],     # headers like Content-Type
+)
+
+#---Server------
 
 @app.get("/")
 def root():
