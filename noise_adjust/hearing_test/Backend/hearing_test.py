@@ -33,6 +33,11 @@ def generate_pure_tone(frequency: float, duration: float,
                        amplitude: float, sample_rate: int,
                        channel: str) -> io.BytesIO:
     
+    if frequency <= 0:
+        raise ValueError(f"Invalid frequency: {frequency}")
+    if amplitude is None or not np.isfinite(amplitude):
+        raise ValueError(f"Invalid amplitude: {amplitude}")
+    
     n_samples    = int(sample_rate * duration)
     fade_samples = int(sample_rate * FADE_DURATION)
 

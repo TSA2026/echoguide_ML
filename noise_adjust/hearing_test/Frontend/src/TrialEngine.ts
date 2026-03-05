@@ -1,5 +1,5 @@
 import { TrialConfig, TrialStep } from "./types"
-import type { Direction } from "./types"  // add Direction to types.ts
+import type { Direction } from "./types"  
 
 export class TrialEngine {
   private currentDb: number
@@ -16,13 +16,18 @@ export class TrialEngine {
 
   constructor(config: TrialConfig = {}) {
     this.currentDb        = config.startDb          ?? -30
+    console.log("Engine initialized, currentDb:", this.currentDb)
     this.requiredReversals = config.requiredReversals ?? 6
     this.minDb            = config.minDb             ?? -80
     this.maxDb            = config.maxDb             ?? 0
   }
 
+  get currentAmplitudeDb(): number {
+    return this.currentDb
+  }
+
   get currentAmplitude(): number {
-    return this.dbToAmplitude(this.currentDb)
+    return Math.pow(10, this.currentDb / 20)
   }
 
   // Call this after each user response

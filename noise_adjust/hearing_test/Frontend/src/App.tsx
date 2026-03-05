@@ -1,6 +1,5 @@
-import TestAudioPlayer from "./TestAudioPlayer"
+import HearingTest from "./HearingTest"
 
 export default function App() {
-  return <TestAudioPlayer />
+  return <HearingTest />
 }
-
