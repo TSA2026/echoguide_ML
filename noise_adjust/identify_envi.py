@@ -363,7 +363,7 @@ def training(model, train_dl, num_epochs):
 
   print('Finished Training')
   
-num_epochs= 12  # Just for demo, adjust this higher.
+num_epochs= 20  # Just for demo, adjust this higher.
 training(myModel, train_dl, num_epochs)
 
 # ----------------------------
