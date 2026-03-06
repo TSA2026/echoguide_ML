@@ -1,5 +1,5 @@
 // HearingTest.tsx
-import { useState, useRef } from "react"
+import { useState, useRef, useCallback } from "react"
 import { TrialEngine } from "./TrialEngine"
 import { AudioPlayer } from "./AudioPlayer"
 import type { Ear, TestPhase, Thresholds, AudiogramData } from "./types"
@@ -8,17 +8,36 @@ const TEST_FREQUENCIES = [1000, 2000, 4000, 8000, 500, 250]
 const TEST_EARS: Ear[] = ["right", "left"]
 
 export default function HearingTest() {
-  const [phase, setPhase]       = useState<TestPhase>("idle")
+  const [phase, setPhase]             = useState<TestPhase>("idle")
   const [currentEar, setCurrentEar]   = useState<Ear>("right")
   const [currentFreq, setCurrentFreq] = useState<number>(TEST_FREQUENCIES[0])
   const [progress, setProgress]       = useState<number>(0)
   const [results, setResults]         = useState<AudiogramData | null>(null)
 
-  const player    = useRef(new AudioPlayer())
-  const engine    = useRef(new TrialEngine())
-  const thresholds = useRef<Thresholds>({ left: {}, right: {} })
+  const player      = useRef(new AudioPlayer())
+  const engine      = useRef(new TrialEngine())
+  const thresholds  = useRef<Thresholds>({ left: {}, right: {} })
+  const responseRef = useRef<((heard: boolean) => void) | null>(null)
+  const runningRef  = useRef(false)
 
   const totalTrials = TEST_FREQUENCIES.length * TEST_EARS.length
+
+  const handleHeard = useCallback(() => {
+    responseRef.current?.(true)
+  }, [])
+
+  const handleNotHeard = useCallback(() => {
+    responseRef.current?.(false)
+  }, [])
+
+  function waitForResponse(): Promise<boolean> {
+    return new Promise((resolve) => {
+      responseRef.current = (heard: boolean) => {
+        responseRef.current = null
+        resolve(heard)
+      }
+    })
+  }
 
   async function startTest() {
     await player.current.unlock()
@@ -27,39 +46,48 @@ export default function HearingTest() {
   }
 
   async function runSequence() {
+    console.log(phase)
+    if (runningRef.current) return
+    runningRef.current = true
+
     for (const ear of TEST_EARS) {
       setCurrentEar(ear)
+      console.log(phase)
       for (const freq of TEST_FREQUENCIES) {
         setCurrentFreq(freq)
-        engine.current.reset()
+        engine.current = new TrialEngine()
 
-        // Run Hughson-Westlake loop for this frequency/ear
         while (!engine.current.done) {
-          const { heard } = await player.current.playAndWait({
+          const currentEngine = engine.current
+          player.current.playTone({
             frequency: freq,
-            amplitudeDb: engine.current.currentAmplitudeDb,
+            amplitudeDb: currentEngine.currentAmplitudeDb,
             ear
           })
-          engine.current.recordResponse(heard)
+          const heard = await waitForResponse()
+          currentEngine.recordResponse(heard)
         }
 
-        // Store threshold
         thresholds.current[ear][freq] = engine.current.threshold!
         setProgress(p => p + 1)
       }
-    }
+    }                              // ← for loops end here
 
-    // --> to backend
-    const response = await fetch("http://localhost:8000/compute_report", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ results: thresholds.current })
-    })
-    const data: AudiogramData = await response.json()
-    setResults(data)
+    runningRef.current = false
+
+    // const response = await fetch("http://localhost:8000/compute_report", {
+    //   method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({ results: thresholds.current })
+    // })
+    // const data: AudiogramData = await response.json()
+    // setResults(data)
     setPhase("done")
-  }
+  }   // ← runSequence ends here
 
+  console.log(phase)
+
+  // ─── Render ───────────────────────────────────────────────
   if (phase === "idle") return (
     <div>
       <h1>Hearing Test</h1>
@@ -70,20 +98,19 @@ export default function HearingTest() {
 
   if (phase === "testing") return (
     <div>
-      <p>Testing: {currentEar} ear — {currentFreq} Hz</p>
+      <p>Testing: {currentEar} ear ~ {currentFreq} Hz</p>
       <p>Progress: {progress} / {totalTrials}</p>
-      <button onClick={() => player.current.respondHeard()}>Heard it</button>
-      <button onClick={() => player.current.respondNotHeard()}>Didn't hear it</button>
+      <button onClick={handleHeard}>Heard it</button>
+      <button onClick={handleNotHeard}>Didn't hear it</button>
     </div>
   )
 
   if (phase === "done" && results) return (
     <div>
       <p>Test complete.</p>
-      {/* Audiogram goes here next */}
-      <pre>{JSON.stringify(results, null, 2)}</pre>
+      {/* <pre>{JSON.stringify(results, null, 2)}</pre> */}
     </div>
   )
 
   return null
-}
+}                                  // ← HearingTest ends here

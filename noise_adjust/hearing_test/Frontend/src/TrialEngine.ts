@@ -63,9 +63,16 @@ export class TrialEngine {
     this.lastDirection = direction
 
     // Hughson-Westlake: -10 if heard, +5 if not
+    const prevDb = this.currentDb
     this.currentDb += heard ? -10 : 5
-    this.currentDb = Math.max(this.minDb, Math.min(this.maxDb, this.currentDb))
+    const clampedDb = Math.max(this.minDb, Math.min(this.maxDb, this.currentDb))
 
+    // If we hit the floor/ceiling, force count it as a reversal
+    if (clampedDb !== this.currentDb && this.lastDirection !== null) {
+      this.reversals.push(clampedDb)
+    }
+
+this.currentDb = clampedDb
     // Check completion
     if (this.reversals.length >= this.requiredReversals) {
       this.threshold = this.computeThreshold()
