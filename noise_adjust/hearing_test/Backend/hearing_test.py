@@ -4,6 +4,9 @@ import struct
 import math
 import io
 from typing import Dict, Any
+from calibration import dbfs_to_dbhl
+from pydub import AudioSegment
+
 
 
 # --- Tone Generation Configuration -------------------------------------------
@@ -28,66 +31,75 @@ sessions: Dict[str, Dict] = {}
 # =============================================================================
 # AUDIO GENERATION
 # =============================================================================
+def compute_report_from_thresholds(results: dict) -> dict:
+    audiogram = {"left": {}, "right": {}}
 
-def generate_pure_tone(frequency: float, duration: float,
-                       amplitude: float, sample_rate: int,
-                       channel: str) -> io.BytesIO:
+    for freq, ears in results.items():
+        for side in ("left", "right"):
+            dbfs = ears.get(side, -30)
+            dbhl = max(0, dbfs_to_dbhl(dbfs))
+            audiogram[side][freq] = dbhl
+
+    summary = {}
+    for side in ("left", "right"):
+        values = list(audiogram[side].values())
+        avg = sum(values) / len(values) if values else 0
+        if avg <= 20:   label = "Normal"
+        elif avg <= 40: label = "Slight loss"
+        elif avg <= 55: label = "Mild loss"
+        elif avg <= 70: label = "Moderate loss"
+        else:           label = "Severe loss"
+        summary[side] = {"average_dBHL": round(avg, 1), "classification": label}
+
+    return {"audiogram": audiogram, "summary": summary}
+
+def generate_pure_tone(
+    frequency: float,
+    duration: float,
+    amplitude: float,
+    sample_rate: int,
+    channel: str = "both"
+) -> io.BytesIO:
     
-    if frequency <= 0:
-        raise ValueError(f"Invalid frequency: {frequency}")
-    if amplitude is None or not np.isfinite(amplitude):
-        raise ValueError(f"Invalid amplitude: {amplitude}")
+    amplitude = max(amplitude, 0.001)
     
-    n_samples    = int(sample_rate * duration)
-    fade_samples = int(sample_rate * FADE_DURATION)
-
-    # Pre-compute the mono sine wave as a list of floats.
-    # math.sin is used instead of numpy to keep this stdlib-only.
-    two_pi_f_over_sr = 2.0 * math.pi * frequency / sample_rate
-    tone = [math.sin(two_pi_f_over_sr * i) for i in range(n_samples)]
-
-    # Apply cosine fade-in (0 -> 1) to the first `fade_samples` samples.
-    # Using (1 - cos(x)) / 2 gives a smooth S-curve window.
-    for i in range(fade_samples):
-        window = (1.0 - math.cos(math.pi * i / fade_samples)) / 2.0
-        tone[i] *= window
-
-    # Apply cosine fade-out (1 -> 0) to the last `fade_samples` samples.
-    for i in range(fade_samples):
-        window = (1.0 - math.cos(math.pi * (fade_samples - i) / fade_samples)) / 2.0
-        tone[n_samples - fade_samples + i] *= window
-
-    # Scale float samples to signed 16-bit integers [-32767, 32767].
-    scale    = amplitude * 32767.0
-    tone_i16 = [max(-32767, min(32767, int(s * scale))) for s in tone]
-
-    # Build per-channel sample lists.
-    silence = [0] * n_samples
-
-    if channel == 'left':
-        left_ch, right_ch = tone_i16, silence
-    elif channel == 'right':
-        left_ch, right_ch = silence, tone_i16
-    else:  # 'both'
-        left_ch, right_ch = tone_i16, tone_i16
-
-    # Interleave stereo: [L0, R0, L1, R1, ...] packed as little-endian 16-bit.
-    # struct.pack '<h' = signed 16-bit little-endian short (WAV standard).
-    pcm_frames = bytearray()
-    for l_sample, r_sample in zip(left_ch, right_ch):
-        pcm_frames += struct.pack('<h', l_sample)
-        pcm_frames += struct.pack('<h', r_sample)
-
-    # Write a proper WAV header using the stdlib `wave` module.
-    wav_buffer = io.BytesIO()
-    with wave.open(wav_buffer, 'wb') as wf:
-        wf.setnchannels(2)           # Stereo
-        wf.setsampwidth(2)           # 2 bytes = 16-bit
+    num_samples = int(sample_rate * duration)
+    fade_samples = int(sample_rate * 0.05)
+    
+    t = np.linspace(0, duration, num_samples, endpoint=False)
+    tone = amplitude * np.sin(2 * np.pi * frequency * t)
+    
+    # Fade in/out
+    fade_in  = 0.5 * (1 - np.cos(np.pi * np.arange(fade_samples) / fade_samples))
+    fade_out = fade_in[::-1]
+    tone[:fade_samples]  *= fade_in
+    tone[-fade_samples:] *= fade_out
+    tone = np.clip(tone, -1.0, 1.0)
+    
+    # Build stereo
+    left  = tone if channel in ("left", "both")  else np.zeros(num_samples)
+    right = tone if channel in ("right", "both") else np.zeros(num_samples)
+    
+    stereo = np.empty(num_samples * 2, dtype=np.int16)
+    stereo[0::2] = (left  * 32767).astype(np.int16)
+    stereo[1::2] = (right * 32767).astype(np.int16)
+    
+    # Write WAV to buffer
+    wav_buf = io.BytesIO()
+    with wave.open(wav_buf, 'wb') as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
         wf.setframerate(sample_rate)
-        wf.writeframes(bytes(pcm_frames))
-
-    wav_buffer.seek(0)  # Rewind so the caller can read from the start
-    return wav_buffer
+        wf.writeframes(stereo.tobytes())
+    wav_buf.seek(0)
+    
+    # Convert to MP3 via pydub
+    audio = AudioSegment.from_wav(wav_buf)
+    mp3_buf = io.BytesIO()
+    audio.export(mp3_buf, format="mp3")
+    mp3_buf.seek(0)
+    
+    return mp3_buf
 
 def compute_report(session_id: str) -> Dict[str, Any]:
 
@@ -120,6 +132,11 @@ import numpy as np
 import seaborn as sns
 
 def create_return_audiogram(frequenciesL, thresholdsL, frequenciesR, thresholdsR):
+    from calibration import dbfs_to_dbhl
+
+    # Convert from dBFS to dBHL for display
+    thresholdsL = [dbfs_to_dbhl(t) for t in thresholdsL]
+    thresholdsR = [dbfs_to_dbhl(t) for t in thresholdsR]
 
     # 1. Set seaborn style
     sns.set_style("whitegrid")
@@ -148,8 +165,8 @@ def create_return_audiogram(frequenciesL, thresholdsL, frequenciesR, thresholdsR
     ax.set_title('Audiogram')
     ax.legend()
 
-    fig.savefig('audiogram', dpi=300)
-    plt.show()
+    # fig.savefig('audiogram', dpi=300)
+    # plt.show()
 
     return fig
 
