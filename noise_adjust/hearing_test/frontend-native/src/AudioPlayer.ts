@@ -24,7 +24,8 @@ export class AudioPlayer {
     throw new Error(`Invalid amplitudeDb: ${amplitudeDb}`)
   }
 
-  const amplitude = Math.pow(10, amplitudeDb / 20)
+  const clampedDb = Math.max(amplitudeDb, -60)
+  const amplitude = Math.pow(10, clampedDb / 20)
 
   const url = new URL(`${this.baseUrl}/generate_tone`)
   url.searchParams.set("frequency", frequency.toString())

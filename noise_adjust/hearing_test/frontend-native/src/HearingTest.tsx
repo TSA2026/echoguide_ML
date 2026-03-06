@@ -3,7 +3,8 @@ import { useState, useRef, useCallback } from "react"
 import { TrialEngine } from "./TrialEngine"
 import { AudioPlayer } from "./AudioPlayer"
 import type { Ear, TestPhase, Thresholds, AudiogramData } from "./types"
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native"
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView } from "react-native"
+import Audiogram from "./Audiogram"
 
 const TEST_FREQUENCIES = [1000, 2000, 4000, 8000, 500, 250]
 const TEST_EARS: Ear[] = ["right", "left"]
@@ -14,6 +15,7 @@ export default function HearingTest() {
   const [currentFreq, setCurrentFreq] = useState<number>(TEST_FREQUENCIES[0])
   const [progress, setProgress]       = useState<number>(0)
   const [results, setResults]         = useState<AudiogramData | null>(null)
+  const [convertedThresholds, setConvertedThresholds] = useState<Record<string, Record<string, number>>>({}) 
 
   const player      = useRef(new AudioPlayer())
   const engine      = useRef(new TrialEngine())
@@ -39,7 +41,17 @@ export default function HearingTest() {
   })
   }, [currentFreq, currentEar])
 
-
+    // Convert from { ear: { freq: db } } to { freq: { ear: db } }
+  function convertThresholds(t: Thresholds): Record<string, Record<string, number>> {
+    const converted: Record<string, Record<string, number>> = {}
+    for (const freq of TEST_FREQUENCIES) {
+      converted[freq.toString()] = {
+        left:  t.left[freq]  ?? -30,
+        right: t.right[freq] ?? -30
+      }
+    }
+    return converted
+  }
 
   function waitForResponse(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -49,6 +61,7 @@ export default function HearingTest() {
       }
     })
   }
+  
 
   async function startTest() {
     await player.current.unlock()
@@ -86,13 +99,15 @@ export default function HearingTest() {
 
     runningRef.current = false
 
-    // const response = await fetch("http://localhost:8000/compute_report", {
-    //   method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ results: thresholds.current })
-    // })
-    // const data: AudiogramData = await response.json()
-    // setResults(data)
+    const payload = { results: convertThresholds(thresholds.current) }
+    const reportResponse = await fetch("http://192.168.1.100:8000/compute_report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+    const data: AudiogramData = await reportResponse.json()
+    setResults(data)
+    setConvertedThresholds(convertThresholds(thresholds.current))
     setPhase("done")
   }   // runSequence ends here
 
@@ -129,10 +144,15 @@ export default function HearingTest() {
   )
 
   if (phase === "done") return (
-    <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Test Complete</Text>
-    </SafeAreaView>
-  )
+  <SafeAreaView style={{ flex: 1 }}>
+    <ScrollView>
+      {results
+        ? <Audiogram data={results} thresholds={convertedThresholds} />
+        : <Text>Loading results...</Text>
+      }
+    </ScrollView>
+  </SafeAreaView>
+)
 
 
   return null
