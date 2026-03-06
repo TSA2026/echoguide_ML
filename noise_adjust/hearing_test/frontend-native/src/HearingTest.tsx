@@ -3,6 +3,7 @@ import { useState, useRef, useCallback } from "react"
 import { TrialEngine } from "./TrialEngine"
 import { AudioPlayer } from "./AudioPlayer"
 import type { Ear, TestPhase, Thresholds, AudiogramData } from "./types"
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from "react-native"
 
 const TEST_FREQUENCIES = [1000, 2000, 4000, 8000, 500, 250]
 const TEST_EARS: Ear[] = ["right", "left"]
@@ -29,6 +30,16 @@ export default function HearingTest() {
   const handleNotHeard = useCallback(() => {
     responseRef.current?.(false)
   }, [])
+
+  const handleReplay = useCallback(() => {
+  player.current.playTone({
+    frequency: currentFreq,
+    amplitudeDb: engine.current.currentAmplitudeDb,
+    ear: currentEar
+  })
+  }, [currentFreq, currentEar])
+
+
 
   function waitForResponse(): Promise<boolean> {
     return new Promise((resolve) => {
@@ -83,34 +94,61 @@ export default function HearingTest() {
     // const data: AudiogramData = await response.json()
     // setResults(data)
     setPhase("done")
-  }   // ← runSequence ends here
+  }   // runSequence ends here
 
   console.log(phase)
 
-  // Render
-  if (phase === "idle") return (
-    <div>
-      <h1>Hearing Test</h1>
-      <p>Put on headphones and find a quiet space.</p>
-      <button onClick={startTest}>Start Test</button>
-    </div>
+  // Render: 
+    if (phase === "idle") return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Hearing Test</Text>
+      <Text style={styles.subtitle}>Put on headphones and find a quiet space.</Text>
+      <TouchableOpacity style={styles.button} onPress={startTest}>
+        <Text style={styles.buttonText}>Start Test</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
   )
 
   if (phase === "testing") return (
-    <div>
-      <p>Testing: {currentEar} ear ~ {currentFreq} Hz</p>
-      <p>Progress: {progress} / {totalTrials}</p>
-      <button onClick={handleHeard}>Heard it</button>
-      <button onClick={handleNotHeard}>Didn't hear it</button>
-    </div>
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.label}>Testing: {currentEar} ear</Text>
+      <Text style={styles.freq}>{currentFreq} Hz</Text>
+      <Text style={styles.progress}>{progress} / {totalTrials}</Text>
+      <View style={styles.buttonRow}>
+        <TouchableOpacity style={[styles.button, styles.heardButton]} onPress={handleHeard}>
+          <Text style={styles.buttonText}>Heard</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.button, styles.notHeardButton]} onPress={handleNotHeard}>
+          <Text style={styles.buttonText}>Didn't hear it</Text>
+        </TouchableOpacity>
+      </View>
+      <TouchableOpacity style={[styles.button, styles.replayButton]} onPress={handleReplay}>
+        <Text style={styles.buttonText}>↺ Replay</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
   )
 
-  if (phase === "done" && results) return (
-    <div>
-      <p>Test complete.</p>
-      {/* <pre>{JSON.stringify(results, null, 2)}</pre> */}
-    </div>
+  if (phase === "done") return (
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Test Complete</Text>
+    </SafeAreaView>
   )
+
 
   return null
-}                                  // ← HearingTest ends here
+}  
+
+const styles = StyleSheet.create({
+  replayButton: { backgroundColor: "#007AFF", marginTop: 16 },
+  container:      { flex: 1, justifyContent: "center", alignItems: "center", padding: 24, backgroundColor: "#fff" },
+  title:          { fontSize: 28, fontWeight: "bold", marginBottom: 8 },
+  subtitle:       { fontSize: 16, color: "#666", marginBottom: 32, textAlign: "center" },
+  label:          { fontSize: 18, color: "#666", marginBottom: 4 },
+  freq:           { fontSize: 48, fontWeight: "bold", marginBottom: 8 },
+  progress:       { fontSize: 14, color: "#999", marginBottom: 48 },
+  buttonRow:      { flexDirection: "row", gap: 16 },
+  button:         { paddingVertical: 16, paddingHorizontal: 24, borderRadius: 12, minWidth: 140, alignItems: "center" },
+  heardButton:    { backgroundColor: "#34C759" },
+  notHeardButton: { backgroundColor: "#FF3B30" },
+  buttonText:     { color: "white", fontSize: 16, fontWeight: "600" },
+})// ← HearingTest ends here
