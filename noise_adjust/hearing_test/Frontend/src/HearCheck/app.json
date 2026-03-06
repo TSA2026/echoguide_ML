@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "HearCheck",
+    "slug": "hearcheck",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#020917"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourcompany.hearcheck",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "HearCheck uses the microphone for audio playback calibration.",
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#020917"
+      },
+      "package": "com.yourcompany.hearcheck",
+      "permissions": ["RECORD_AUDIO"]
+    },
+    "plugins": [
+      "expo-av",
+      "expo-file-system",
+      "expo-sharing"
+    ]
+  }
+}

@@ -1,5 +1,5 @@
-import HearingTest from "./HearingTest"
+import Hearing_test_front from "./Hearing_test/Hearing_test";
 
 export default function App() {
-  return <HearingTest />
+  return <Hearing_test_front />;
 }
