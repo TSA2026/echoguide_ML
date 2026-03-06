@@ -87,7 +87,7 @@ export default function HearingTest() {
 
   console.log(phase)
 
-  // ─── Render ───────────────────────────────────────────────
+  // Render
   if (phase === "idle") return (
     <div>
       <h1>Hearing Test</h1>
